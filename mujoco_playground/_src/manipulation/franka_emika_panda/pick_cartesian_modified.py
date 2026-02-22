@@ -426,6 +426,7 @@ class PandaPickCuboid(pick.PandaPickCube):
         'floor_collision': jp.array(0.0, dtype=float),
         'cube_collision': jp.array(0.0),
         'jerk_per_step': jp.array(0.0),
+        'tracking_error_per_step': jp.array(0.0),
         'success': jp.array(0.0),
         'out_of_bounds': jp.array(0.0),
         **{
@@ -583,6 +584,19 @@ class PandaPickCuboid(pick.PandaPickCube):
     # keep claw open
     
     data = mjx_env.step(self._mjx_model, data, ctrl, self.n_substeps)
+
+    # Update tracking error
+    if self._config.actuator == 'position':
+      desired_qpos = ctrl[:7]  # Assuming ctrl is the target joint positions
+      
+      tracking_error = jp.abs(desired_qpos - data.qpos[:7]) / (jp.array(self._jnt_range())[:, 1] - jp.array(self._jnt_range())[:, 0]) 
+      norm_tracking_error = jp.linalg.norm(tracking_error)
+      state.metrics.update(tracking_error_per_step=norm_tracking_error.astype(float))
+    elif self._config.actuator == 'velocity':
+      desired_qvel = ctrl[:7]  # Assuming ctrl is the target joint velocities
+      tracking_error = jp.abs(desired_qvel - data.qvel[:7]) / (jp.array(self._jnt_vel_range())[:, 1] - jp.array(self._jnt_vel_range())[:, 0]) 
+      norm_tracking_error = jp.linalg.norm(tracking_error)
+      state.metrics.update(tracking_error_per_step=norm_tracking_error.astype(float))
 
     # Dense rewards
     raw_rewards = self._get_reward(data, state.info)
